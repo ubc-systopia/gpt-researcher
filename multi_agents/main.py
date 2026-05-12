@@ -8,6 +8,8 @@ from multi_agents.agents import ChiefEditorAgent
 import asyncio
 import json
 from gpt_researcher.utils.enum import Tone
+from gpt_researcher.utils.langsmith import save_langsmith_stats
+from gpt_researcher.utils.stdout import stdout_to_file
 
 # Run with LangSmith if API key is set
 if os.environ.get("LANGCHAIN_API_KEY"):
@@ -37,11 +39,11 @@ def open_task():
 
     return task
 
-async def run_research_task(query, websocket=None, stream_output=None, tone=Tone.Objective, headers=None):
+async def run_research_task(query, websocket=None, stream_output=None, tone=Tone.Objective, headers=None, task_id=None):
     task = open_task()
     task["query"] = query
 
-    chief_editor = ChiefEditorAgent(task, websocket, stream_output, tone, headers)
+    chief_editor = ChiefEditorAgent(task, websocket, stream_output, tone, headers, task_id)
     research_report = await chief_editor.run_research_task()
 
     if websocket and stream_output:
@@ -51,9 +53,14 @@ async def run_research_task(query, websocket=None, stream_output=None, tone=Tone
 
 async def main():
     task = open_task()
+    task_id = str(uuid.uuid4())
+    stdout_path = f"outputs/{task_id}_stdout.txt"
 
-    chief_editor = ChiefEditorAgent(task)
-    research_report = await chief_editor.run_research_task(task_id=uuid.uuid4())
+    with stdout_to_file(stdout_path):
+        chief_editor = ChiefEditorAgent(task, task_id=task_id)
+        research_report = await chief_editor.run_research_task()
+
+        save_langsmith_stats(task_id=str(task_id))
 
     return research_report
 

@@ -36,8 +36,7 @@ services:
           sleep 5;
       done;
       echo 'vllm-server is ready!';
-      python3 cli.py \"What are the top open source web research agents?\" --report_type research_report --tone analytical
-      "
+      python cli.py \"Explain the impact of 6G on edge AI\" --report_type research_report --tone analytical --use_multi_agent"
 
 networks:
   researcher-net:
