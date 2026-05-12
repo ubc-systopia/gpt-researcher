@@ -40,6 +40,8 @@ pandas>=2.0.0
 # Vector Store & Embeddings
 tiktoken>=0.7.0
 numpy>=2.0.0,<2.3.0
+langchain-huggingface>=0.1.0
+sentence-transformers>=3.0.0
 
 # Utilities
 aiofiles>=23.2.1

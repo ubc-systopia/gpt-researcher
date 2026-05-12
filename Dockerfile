@@ -23,16 +23,17 @@ RUN apt-get update \
 # Stage 2: Python dependencies installation
 FROM install-browser AS gpt-researcher-install
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV PIP_ROOT_USER_ACTION=ignore
-WORKDIR /usr/src/app
+WORKDIR /app
 
 # Copy and install Python dependencies in a single layer to optimize cache usage
 COPY ./requirements.txt ./requirements.txt
 COPY ./multi_agents/requirements.txt ./multi_agents/requirements.txt
 
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt --upgrade --prefer-binary && \
-    pip install --no-cache-dir -r multi_agents/requirements.txt --upgrade --prefer-binary
+RUN uv pip install --system --no-cache -r requirements.txt -r multi_agents/requirements.txt
 
 # Stage 3: Final stage with non-root user and app
 FROM gpt-researcher-install AS gpt-researcher
@@ -49,16 +50,16 @@ ARG WORKERS=1
 ENV WORKERS=${WORKERS}
 
 # Create a non-root user for security
-# NOTE: Don't use this if you are relying on `_check_pkg` to pip install packages dynamically.
 RUN useradd -ms /bin/bash gpt-researcher && \
-    chown -R gpt-researcher:gpt-researcher /usr/src/app && \
-    # Add these lines to create and set permissions for outputs directory
-    mkdir -p /usr/src/app/outputs && \
-    chown -R gpt-researcher:gpt-researcher /usr/src/app/outputs && \
-    chmod 777 /usr/src/app/outputs
+    chown -R gpt-researcher:gpt-researcher /app && \
+    mkdir -p /app/outputs /app/logs && \
+    chown -R gpt-researcher:gpt-researcher /app/outputs /app/logs && \
+    chmod 777 /app/outputs /app/logs
+
 USER gpt-researcher
-WORKDIR /usr/src/app
+WORKDIR /app
 
 # Copy the rest of the application files with proper ownership
 COPY --chown=gpt-researcher:gpt-researcher ./ ./
-CMD uvicorn main:app --host ${HOST} --port ${PORT} --workers ${WORKERS}
+
+CMD ["python", "cli.py"]
