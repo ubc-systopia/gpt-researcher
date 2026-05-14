@@ -35,14 +35,14 @@ The `docker-compose.yml` file uses the default latest vLLM Docker image. The `gp
 docker compose build gpt-researcher-cli
 ```
 
-Start the vLLM + gpt-researcher containers with:
-```
-docker compose up
+Start the vLLM + gpt-researcher containers with the automated profiling script (includes GPU/CPU/memory monitoring) and a plotting script:
+```bash
+./profile_docker.sh
 ```
 
-After the run completes, Ctrl-C and clean up:
-```
-docker compose down
+Alternatively, you can run this command to run and automatically clean up the docker containers:
+```bash
+docker compose up --abort-on-container-exit --exit-code-from gpt-researcher-cli && docker compose down
 ```
 
 The output files (STDOUT, LangSmith trace CSV, agent output reports, etc) are all saved to `./outputs/`.
