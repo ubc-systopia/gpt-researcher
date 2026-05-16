@@ -73,25 +73,30 @@ def main():
             if not ls_df.empty:
                 init_end_time_sec = (ls_df['Start Time'].min() - start_time).total_seconds()
                 
-                # Extract LLM inference intervals
+                # Extract LLM inference intervals and compute concurrency
+                events = []
                 llm_df = ls_df[ls_df['Run Type'] == 'llm']
                 for _, row in llm_df.iterrows():
                     if pd.notna(row['End Time']):
                         start_sec = (row['Start Time'] - start_time).total_seconds()
                         end_sec = (row['End Time'] - start_time).total_seconds()
-                        llm_intervals.append((start_sec, end_sec))
+                        events.append((start_sec, 'start'))
+                        events.append((end_sec, 'end'))
                 
-                # Merge overlapping intervals to prevent irregular shading
-                if llm_intervals:
-                    llm_intervals.sort(key=lambda x: x[0])
-                    merged_intervals = [llm_intervals[0]]
-                    for current in llm_intervals[1:]:
-                        last = merged_intervals[-1]
-                        if current[0] <= last[1]:
-                            merged_intervals[-1] = (last[0], max(last[1], current[1]))
-                        else:
-                            merged_intervals.append(current)
-                    llm_intervals = merged_intervals
+                events.sort(key=lambda x: (x[0], 1 if x[1] == 'end' else 0))
+                
+                concurrent_calls = 0
+                last_time = None
+                for time, event_type in events:
+                    if last_time is not None and time > last_time and concurrent_calls > 0:
+                        llm_intervals.append((last_time, time, concurrent_calls))
+                    
+                    if event_type == 'start':
+                        concurrent_calls += 1
+                    else:
+                        concurrent_calls -= 1
+                    
+                    last_time = time
         except Exception as e:
             print(f"Error processing langsmith stats: {e}")
 
@@ -116,12 +121,14 @@ def main():
             ax.axvline(x=init_end_time_sec, color='red', linestyle='--', linewidth=1.5, label=label)
         
         added_llm_label = False
-        for start_sec, end_sec in llm_intervals:
+        for start_sec, end_sec, concurrency in llm_intervals:
             label = '_nolegend_'
             if is_first and not added_llm_label:
-                label = 'LLM Inference'
+                label = 'LLM Inference (Darker = Higher Concurrency)'
                 added_llm_label = True
-            ax.axvspan(start_sec, end_sec, color='orange', alpha=0.2, label=label)
+            
+            calc_alpha = min(0.1 + 0.15 * concurrency, 0.8)
+            ax.axvspan(start_sec, end_sec, color='orange', alpha=calc_alpha, label=label)
 
     # CPU Utilization
     for container in docker_df['Container'].unique():
