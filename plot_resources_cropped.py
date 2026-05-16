@@ -71,15 +71,22 @@ def main():
             ls_df = ls_df[ls_df['Start Time'] >= start_time]
             
             if not ls_df.empty:
-                init_end_time_sec = (ls_df['Start Time'].min() - start_time).total_seconds()
+                init_end_time_sec_orig = (ls_df['Start Time'].min() - start_time).total_seconds()
+                
+                # Rebase elapsed times so that 0 is the end of initialization
+                docker_df['Elapsed_Time'] -= init_end_time_sec_orig
+                gpu_df['Elapsed_Time'] -= init_end_time_sec_orig
+                
+                new_start_time = ls_df['Start Time'].min()
+                init_end_time_sec = 0
                 
                 # Extract LLM inference intervals and compute concurrency
                 events = []
                 llm_df = ls_df[ls_df['Run Type'] == 'llm']
                 for _, row in llm_df.iterrows():
                     if pd.notna(row['End Time']):
-                        start_sec = (row['Start Time'] - start_time).total_seconds()
-                        end_sec = (row['End Time'] - start_time).total_seconds()
+                        start_sec = (row['Start Time'] - new_start_time).total_seconds()
+                        end_sec = (row['End Time'] - new_start_time).total_seconds()
                         events.append((start_sec, 'start'))
                         events.append((end_sec, 'end'))
                 
@@ -207,9 +214,11 @@ def main():
     for ax in axes:
         ax.set_xlabel('Time (seconds)')
         ax.tick_params(labelbottom=True)
+        if init_end_time_sec is not None:
+            ax.set_xlim(left=init_end_time_sec)
 
     plt.tight_layout()
-    output_file = './outputs/resource_timeline.png'
+    output_file = './outputs/resource_timeline_cropped.png'
     plt.savefig(output_file, dpi=150)
     print(f"Plot saved to {output_file}")
 
