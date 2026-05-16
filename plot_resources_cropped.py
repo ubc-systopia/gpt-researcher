@@ -110,6 +110,7 @@ def main():
             print(f"Error processing langsmith stats: {e}")
 
     # Clean Docker and GPU data
+    docker_df['Container'] = docker_df['Container'].replace('gpt-researcher-cli', 'gpt-researcher')
     docker_df['CPU_Perc_Val'] = docker_df['CPU_Perc'].apply(parse_units)
     docker_df['Mem_Usage_GiB'] = docker_df['Mem_Usage'].apply(parse_units) / 1024
     docker_df['Net_Input_GiB'] = docker_df['Net_Input'].apply(parse_units) / 1024
@@ -137,16 +138,15 @@ def main():
     fig, axes = plt.subplots(6, 1, figsize=(12, 26), sharex=True)
     plt.subplots_adjust(hspace=0.4)
 
-    def add_overlays(ax, is_first=False):
+    def add_overlays(ax):
         if init_end_time_sec is not None:
-            label = 'LLM Initialization Completed' if is_first else '_nolegend_'
-            ax.axvline(x=init_end_time_sec, color=init_line_color, linestyle='--', linewidth=1.5, label=label)
+            ax.axvline(x=init_end_time_sec, color=init_line_color, linestyle='--', linewidth=1.5, label='_nolegend_')
         
         added_llm_label = False
         for start_sec, end_sec, concurrency in llm_intervals:
             label = '_nolegend_'
-            if is_first and not added_llm_label:
-                label = 'LLM Inference (Darker = Higher Concurrency)'
+            if not added_llm_label:
+                label = 'LLM Inference'
                 added_llm_label = True
             
             calc_alpha = min(0.1 + 0.15 * concurrency, 0.8)
@@ -158,8 +158,8 @@ def main():
         axes[0].plot(data['Elapsed_Time'], data['CPU_Perc_Val'], label=container, color=container_colors[container])
     axes[0].set_ylabel('CPU Utilization (%)')
     axes[0].set_title('CPU Utilization vs Time')
-    add_overlays(axes[0], is_first=True)
-    axes[0].legend(loc='upper right')
+    add_overlays(axes[0])
+    axes[0].legend(loc='center right')
     axes[0].grid(True, alpha=0.3)
 
     # System Memory Usage
@@ -169,7 +169,7 @@ def main():
     axes[1].set_ylabel('Memory Usage (GiB)')
     axes[1].set_title('System Memory Usage vs Time')
     add_overlays(axes[1])
-    axes[1].legend(loc='upper right')
+    axes[1].legend(loc='center right')
     axes[1].grid(True, alpha=0.3)
 
     # GPU Utilization
@@ -178,7 +178,7 @@ def main():
     axes[2].set_ylabel('GPU Utilization (%)')
     axes[2].set_title('GPU Utilization vs Time')
     add_overlays(axes[2])
-    axes[2].legend(loc='upper right')
+    axes[2].legend(loc='center right')
     axes[2].grid(True, alpha=0.3)
 
     # GPU Memory Usage
@@ -187,29 +187,37 @@ def main():
     axes[3].set_ylabel('GPU Memory Used (GiB)')
     axes[3].set_title('GPU Memory Usage vs Time')
     add_overlays(axes[3])
-    axes[3].legend(loc='upper right')
+    axes[3].legend(loc='center right')
     axes[3].grid(True, alpha=0.3)
 
     # Network I/O
-    for container in containers:
+    for i, container in enumerate(containers):
+        if 'gpt-researcher' not in container:
+            continue
         data = docker_df[docker_df['Container'] == container]
-        axes[4].plot(data['Elapsed_Time'], data['Net_Input_GiB'], label=f"{container} In", color=container_colors[container])
-        axes[4].plot(data['Elapsed_Time'], data['Net_Output_GiB'], label=f"{container} Out", linestyle=':', color=container_colors[container])
+        color_in = container_colors[container]
+        color_out = colors[(i + 5) % len(colors)]
+        axes[4].plot(data['Elapsed_Time'], data['Net_Input_GiB'], label=f"{container} In", color=color_in)
+        axes[4].plot(data['Elapsed_Time'], data['Net_Output_GiB'], label=f"{container} Out", linestyle='-', color=color_out)
     axes[4].set_ylabel('Network I/O (GiB)')
     axes[4].set_title('Network I/O vs Time')
     add_overlays(axes[4])
-    axes[4].legend(loc='upper right')
+    axes[4].legend(loc='center right')
     axes[4].grid(True, alpha=0.3)
 
     # Block I/O
-    for container in containers:
+    for i, container in enumerate(containers):
+        if 'gpt-researcher' not in container:
+            continue
         data = docker_df[docker_df['Container'] == container]
-        axes[5].plot(data['Elapsed_Time'], data['Block_Input_GiB'], label=f"{container} Read", color=container_colors[container])
-        axes[5].plot(data['Elapsed_Time'], data['Block_Output_GiB'], label=f"{container} Write", linestyle=':', color=container_colors[container])
+        color_in = container_colors[container]
+        color_out = colors[(i + 5) % len(colors)]
+        axes[5].plot(data['Elapsed_Time'], data['Block_Input_GiB'], label=f"{container} Read", color=color_in)
+        axes[5].plot(data['Elapsed_Time'], data['Block_Output_GiB'], label=f"{container} Write", linestyle='-', color=color_out)
     axes[5].set_ylabel('Block I/O (GiB)')
     axes[5].set_title('Block I/O vs Time')
     add_overlays(axes[5])
-    axes[5].legend(loc='upper right')
+    axes[5].legend(loc='center right')
     axes[5].grid(True, alpha=0.3)
 
     # Add x-axis label to all subplots
@@ -224,7 +232,7 @@ def main():
 
     plt.tight_layout()
     output_file = './outputs/resource_timeline_cropped.png'
-    plt.savefig(output_file, dpi=150)
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
 
 if __name__ == "__main__":
