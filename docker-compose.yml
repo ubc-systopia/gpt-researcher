@@ -15,7 +15,7 @@ services:
     ports:
       - "7000:7000"
     ipc: host
-    command: ["--model", "openai/gpt-oss-20b", "--host", "0.0.0.0", "--port", "7000"]
+    command: ["--model", "openai/gpt-oss-20b", "--host", "0.0.0.0", "--port", "7000", "--no-enable-prefix-caching"]
 
   gpt-researcher-cli:
     build: .

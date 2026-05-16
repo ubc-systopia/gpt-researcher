@@ -34,9 +34,8 @@ echo "Stopping monitors..."
 [ ! -z "$GPU_PID" ] && kill $GPU_PID 2>/dev/null
 
 # Generate plots
-if [ -f "plot_resources.py" ]; then
-    echo "Generating resource usage plots..."
-    ./.venv/bin/python3 plot_resources.py
-fi
+echo "Generating resource usage plots..."
+./.venv/bin/python3 plot_resources.py
+./.venv/bin/python3 plot_resources_cropped.py
 
 echo "Task complete. Check ./outputs/ and ./logs/ for results."
