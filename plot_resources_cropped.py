@@ -55,6 +55,7 @@ def main():
     import datetime
     langsmith_files = glob.glob('./outputs/*_langsmith_stats.csv')
     init_end_time_sec = None
+    workload_end_time_sec = None
     llm_intervals = []
 
     if langsmith_files:
@@ -79,6 +80,7 @@ def main():
                 
                 new_start_time = ls_df['Start Time'].min()
                 init_end_time_sec = 0
+                workload_end_time_sec = (ls_df['End Time'].max() - new_start_time).total_seconds()
                 
                 # Extract LLM inference intervals and compute concurrency
                 events = []
@@ -215,7 +217,10 @@ def main():
         ax.set_xlabel('Time (seconds)')
         ax.tick_params(labelbottom=True)
         if init_end_time_sec is not None:
-            ax.set_xlim(left=init_end_time_sec)
+            if workload_end_time_sec is not None and not pd.isna(workload_end_time_sec):
+                ax.set_xlim(left=init_end_time_sec, right=workload_end_time_sec)
+            else:
+                ax.set_xlim(left=init_end_time_sec)
 
     plt.tight_layout()
     output_file = './outputs/resource_timeline_cropped.png'
