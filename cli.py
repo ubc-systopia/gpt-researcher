@@ -20,6 +20,8 @@ from gpt_researcher import GPTResearcher
 from gpt_researcher.utils.enum import ReportType, ReportSource, Tone
 from backend.report_type import DetailedReport
 from backend.utils import write_md_to_pdf, write_md_to_word
+from gpt_researcher.utils.langsmith import save_langsmith_stats
+from gpt_researcher.utils.stdout import stdout_to_file
 
 # =============================================================================
 # CLI
@@ -131,6 +133,16 @@ cli.add_argument(
     help="Skip DOCX generation (generate markdown and PDF only)."
 )
 
+# =====================================
+# Arg: Enable Multiple Agents Flag
+# =====================================
+
+cli.add_argument(
+    "--use_multi_agent",
+    action="store_true",
+    help="Use multiple agents in parallel"
+)
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -140,75 +152,86 @@ async def main(args):
     Conduct research on the given query, generate the report, and write
     it as a markdown file to the output directory.
     """
-    query_domains = args.query_domains.split(",") if args.query_domains else []
-
-    if args.report_type == 'detailed_report':
-        detailed_report = DetailedReport(
-            query=args.query,
-            query_domains=query_domains,
-            report_type="research_report",
-            report_source="web_search",
-        )
-
-        report = await detailed_report.run()
-    else:
-        # Convert the simple keyword to the full Tone enum value
-        tone_map = {
-            "objective": Tone.Objective,
-            "formal": Tone.Formal,
-            "analytical": Tone.Analytical,
-            "persuasive": Tone.Persuasive,
-            "informative": Tone.Informative,
-            "explanatory": Tone.Explanatory,
-            "descriptive": Tone.Descriptive,
-            "critical": Tone.Critical,
-            "comparative": Tone.Comparative,
-            "speculative": Tone.Speculative,
-            "reflective": Tone.Reflective,
-            "narrative": Tone.Narrative,
-            "humorous": Tone.Humorous,
-            "optimistic": Tone.Optimistic,
-            "pessimistic": Tone.Pessimistic
-        }
-
-        researcher = GPTResearcher(
-            query=args.query,
-            query_domains=query_domains,
-            report_type=args.report_type,
-            report_source=args.report_source,
-            tone=tone_map[args.tone],
-            encoding=args.encoding
-        )
-
-        await researcher.conduct_research()
-
-        report = await researcher.write_report()
-
-    # Write the report to markdown file
     task_id = str(uuid4())
-    artifact_filepath = f"outputs/{task_id}.md"
-    os.makedirs("outputs", exist_ok=True)
-    with open(artifact_filepath, "w", encoding="utf-8") as f:
-        f.write(report)
-    print(f"Report written to '{artifact_filepath}'")
+    stdout_path = f"outputs/{task_id}_stdout.txt"
+    # Convert the simple keyword to the full Tone enum value
+    tone_map = {
+        "objective": Tone.Objective,
+        "formal": Tone.Formal,
+        "analytical": Tone.Analytical,
+        "persuasive": Tone.Persuasive,
+        "informative": Tone.Informative,
+        "explanatory": Tone.Explanatory,
+        "descriptive": Tone.Descriptive,
+        "critical": Tone.Critical,
+        "comparative": Tone.Comparative,
+        "speculative": Tone.Speculative,
+        "reflective": Tone.Reflective,
+        "narrative": Tone.Narrative,
+        "humorous": Tone.Humorous,
+        "optimistic": Tone.Optimistic,
+        "pessimistic": Tone.Pessimistic
+    }
 
-    # Generate PDF if not disabled
-    if not args.no_pdf:
-        try:
-            pdf_path = await write_md_to_pdf(report, task_id)
-            if pdf_path:
-                print(f"PDF written to '{pdf_path}'")
-        except Exception as e:
-            print(f"Warning: PDF generation failed: {e}")
+    with stdout_to_file(stdout_path):
+        query_domains = args.query_domains.split(",") if args.query_domains else []
 
-    # Generate DOCX if not disabled
-    if not args.no_docx:
-        try:
-            docx_path = await write_md_to_word(report, task_id)
-            if docx_path:
-                print(f"DOCX written to '{docx_path}'")
-        except Exception as e:
-            print(f"Warning: DOCX generation failed: {e}")
+        if args.use_multi_agent:
+            from multi_agents.main import run_research_task
+            report = await run_research_task(
+                query=args.query,
+                tone=tone_map[args.tone],
+                task_id=task_id
+                )
+        elif args.report_type == 'detailed_report':
+            detailed_report = DetailedReport(
+                query=args.query,
+                query_domains=query_domains,
+                report_type="research_report",
+                report_source="web_search",
+            )
+
+            report = await detailed_report.run()
+        else:
+            researcher = GPTResearcher(
+                query=args.query,
+                query_domains=query_domains,
+                report_type=args.report_type,
+                report_source=args.report_source,
+                tone=tone_map[args.tone],
+                encoding=args.encoding
+            )
+
+            await researcher.conduct_research()
+
+            report = await researcher.write_report()
+
+        # Write the report to markdown file
+        artifact_filepath = f"outputs/{task_id}.md"
+        os.makedirs("outputs", exist_ok=True)
+        with open(artifact_filepath, "w", encoding="utf-8") as f:
+            f.write(report)
+        print(f"Report written to '{artifact_filepath}'")
+
+        # Generate PDF if not disabled
+        if not args.no_pdf:
+            try:
+                pdf_path = await write_md_to_pdf(report, task_id)
+                if pdf_path:
+                    print(f"PDF written to '{pdf_path}'")
+            except Exception as e:
+                print(f"Warning: PDF generation failed: {e}")
+
+        # Generate DOCX if not disabled
+        if not args.no_docx:
+            try:
+                docx_path = await write_md_to_word(report, task_id)
+                if docx_path:
+                    print(f"DOCX written to '{docx_path}'")
+            except Exception as e:
+                print(f"Warning: DOCX generation failed: {e}")
+
+        save_langsmith_stats(task_id=task_id)
 
 if __name__ == "__main__":
     load_dotenv()

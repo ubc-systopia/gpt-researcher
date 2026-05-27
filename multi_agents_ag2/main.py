@@ -7,6 +7,8 @@ import json
 
 from multi_agents_ag2.agents import ChiefEditorAgent
 from gpt_researcher.utils.enum import Tone
+from gpt_researcher.utils.langsmith import save_langsmith_stats
+from gpt_researcher.utils.stdout import stdout_to_file
 
 
 load_dotenv()
@@ -49,9 +51,14 @@ async def run_research_task(query, websocket=None, stream_output=None, tone=Tone
 
 async def main():
     task = open_task()
+    task_id = uuid.uuid4()
+    stdout_path = f"outputs/{task_id}_stdout.txt"
 
-    chief_editor = ChiefEditorAgent(task)
-    research_report = await chief_editor.run_research_task(task_id=uuid.uuid4())
+    with stdout_to_file(stdout_path):
+        chief_editor = ChiefEditorAgent(task)
+        research_report = await chief_editor.run_research_task(task_id=task_id)
+
+        save_langsmith_stats(task_id=str(task_id))
 
     return research_report
 

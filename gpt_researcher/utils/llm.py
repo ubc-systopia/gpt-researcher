@@ -115,6 +115,8 @@ async def create_chat_completion(
                 continue
             break
 
+        logging.getLogger(__name__).debug(f"LLM response: {response}")
+
         if not response:
             last_exception = RuntimeError("Empty response from LLM provider")
             logging.getLogger(__name__).warning(

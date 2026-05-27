@@ -1,77 +1,42 @@
 services:
-  gpt-researcher:
-    pull_policy: build
-    image: gptresearcher/gpt-researcher
-    build: ./
-    environment: 
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
-      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY}
-      LOGGING_LEVEL: INFO
-      # Image generation (optional - set to enable inline images in reports)
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      IMAGE_GENERATION_ENABLED: ${IMAGE_GENERATION_ENABLED:-false}
-      IMAGE_GENERATION_MODEL: ${IMAGE_GENERATION_MODEL:-gemini-2.0-flash-preview-image-generation}
-      IMAGE_GENERATION_MAX_IMAGES: ${IMAGE_GENERATION_MAX_IMAGES:-3}
-    volumes:
-      - ${PWD}/my-docs:/usr/src/app/my-docs:rw
-      - ${PWD}/outputs:/usr/src/app/outputs:rw
-      - ${PWD}/logs:/usr/src/app/logs:rw
-    user: root
-    restart: always
+  vllm-server:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - researcher-net
     ports:
-      - 8000:8000
-      
-  gptr-nextjs:
-    pull_policy: build
-    image: gptresearcher/gptr-nextjs
-    stdin_open: true
-    environment:
-      CHOKIDAR_USEPOLLING: "true"
-      LOGGING_LEVEL: INFO
-      NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID}
-      NEXT_PUBLIC_GPTR_API_URL: ${NEXT_PUBLIC_GPTR_API_URL}
-    build:
-      dockerfile: Dockerfile.dev
-      context: frontend/nextjs
-    volumes:
-      - /app/node_modules
-      - ./frontend/nextjs:/app
-      - ./frontend/nextjs/.next:/app/.next
-      - ./outputs:/app/outputs
-    restart: always
-    ports:
-      - 3000:3000
+      - "7000:7000"
+    ipc: host
+    command: ["--model", "openai/gpt-oss-20b", "--host", "0.0.0.0", "--port", "7000", "--no-enable-prefix-caching"]
 
-  gpt-researcher-tests:
-    image: gptresearcher/gpt-researcher-tests
-    build: ./
-    environment: 
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
-      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY}
-      LOGGING_LEVEL: INFO
-    profiles: ["test"]
-    command: >
-      /bin/sh -c "
-      pip install pytest pytest-asyncio faiss-cpu &&
-      python -m pytest tests/report-types.py &&
-      python -m pytest tests/vector-store.py
-      "
-  
-  discord-bot:
-    build:
-      context: ./docs/discord-bot
-      dockerfile: Dockerfile.dev
-    environment:
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+  gpt-researcher-cli:
+    build: .
+    container_name: gpt-researcher-cli
+    networks:
+      - researcher-net
+    env_file:
+      - .env
+    user: root
     volumes:
-      - ./docs/discord-bot:/app
-      - /app/node_modules
-    ports:
-      - 3001:3000
-    profiles: ["discord"]
-    restart: always
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for vllm-server to be ready...';
+      while ! python3 -c 'import urllib.request; urllib.request.urlopen(\"http://vllm-server:7000/health\")' 2>/dev/null; do
+          sleep 5;
+      done;
+      echo 'vllm-server is ready!';
+      python cli.py \"Explain the impact of 6G on edge AI\" --report_type research_report --tone analytical --use_multi_agent"
+
+networks:
+  researcher-net:
+    driver: bridge

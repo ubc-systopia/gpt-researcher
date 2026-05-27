@@ -19,13 +19,13 @@ from . import \
 class ChiefEditorAgent:
     """Agent responsible for managing and coordinating editing tasks."""
 
-    def __init__(self, task: dict, websocket=None, stream_output=None, tone=None, headers=None):
+    def __init__(self, task: dict, websocket=None, stream_output=None, tone=None, headers=None, task_id=None):
         self.task = task
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers or {}
         self.tone = tone
-        self.task_id = self._generate_task_id()
+        self.task_id = task_id or self._generate_task_id()
         self.output_dir = self._create_output_directory()
 
     def _generate_task_id(self):
@@ -115,4 +115,4 @@ class ChiefEditorAgent:
         }
 
         result = await chain.ainvoke({"task": self.task}, config=config)
-        return result
+        return result.get("report")

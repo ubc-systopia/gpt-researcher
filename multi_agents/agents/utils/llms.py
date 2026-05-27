@@ -34,3 +34,4 @@ async def call_model(
     except Exception as e:
         print("⚠️ Error in calling model")
         logger.error(f"Error in calling model: {e}")
+        raise e
